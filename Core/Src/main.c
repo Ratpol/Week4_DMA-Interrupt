@@ -46,11 +46,11 @@ DMA_HandleTypeDef hdma_adc1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint32_t ADCData[4] = { 0 };
+uint32_t ADCData[2] = { 0 };
 uint32_t ButtonTimeStamp = 0;
-uint8_t PinValue = 0;
-uint32_t ReleaseButton = 0;
-uint8_t R,T = 0;
+uint32_t TIME = 0;
+uint32_t TimeRandom = 0;
+uint8_t state = 0;
 
 /* USER CODE END PV */
 
@@ -61,7 +61,7 @@ static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
-void Run(); // Function  for Run
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -101,7 +101,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-	HAL_ADC_Start_DMA(&hadc1, ADCData, 4);
+	HAL_ADC_Start_DMA(&hadc1, ADCData, 2);
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); //set LED = 1 before press B1
   /* USER CODE END 2 */
 
@@ -111,11 +111,19 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		if (T==1){
-		Run();
+		if (state == 1) {
+			TimeRandom = 1000 + ((22695477 * ADCData[0] + ADCData[1]) % 10000);
+			ButtonTimeStamp = HAL_GetTick();
+			while (HAL_GetTick() - ButtonTimeStamp <= TimeRandom) //ms
+			{
+				// TimeRandom delay LED
+			}
+			state = 2;
+			HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+			ButtonTimeStamp = HAL_GetTick();
 		}
-
 	}
+
   /* USER CODE END 3 */
 }
 
@@ -191,7 +199,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 4;
+  hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -211,22 +219,6 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = 2;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
-  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
-  sConfig.Rank = 3;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
-  sConfig.Channel = ADC_CHANNEL_VREFINT;
-  sConfig.Rank = 4;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -326,34 +318,21 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == GPIO_PIN_13) {
-		T=1;
+		switch (state) {//After Press the Button B1
+			case 0:
+				HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+			state = 1;
+				break;
+			case 2:
+				TIME = HAL_GetTick() - ButtonTimeStamp;
+				state = 0;
+				break;
+			default:
+				state = 0;
+				break;
+		}
 	}
 }
-
-void Run(){
-	PinValue = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
-		if (R == 0) {
-			if (PinValue == GPIO_PIN_RESET) {  //Press the Button B1
-				R++;
-				HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-				ButtonTimeStamp = HAL_GetTick();
-			}}
-			if (R == 1) {
-				if (HAL_GetTick() - ButtonTimeStamp
-						>= (1000 + (((22695477 * ADCData[0]) + ADCData[1]) % 10000))) {
-					R++;
-					HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
-					ButtonTimeStamp = HAL_GetTick();
-				}
-			}
-			if (R == 2) {
-				if (PinValue == GPIO_PIN_SET) {  // Release the Button B1
-					T = R = 0;
-					ReleaseButton = HAL_GetTick() - ButtonTimeStamp;
-				}
-			}
-		}
-
 /* USER CODE END 4 */
 
 /**
